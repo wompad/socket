@@ -89,6 +89,6 @@ app.get('/', (req, res) => {
 // ===============================
 const PORT = 6001;
 server.listen(PORT, () => {
-  console.log(`🚀 Socket.IO server running on http://localhost:${PORT}`);
-  console.log(`🔗 Ready for Laravel POST requests at /broadcast`);
+  console.log(`🚀 Socket.IO server running on port:${PORT}`);
+  console.log(`🔗 Ready for requests at /broadcast`);
 });
