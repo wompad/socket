@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DSWD Socket Server</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * {
       margin: 0;
@@ -160,6 +161,56 @@
       color: #333;
       margin-bottom: 5px;
     }
+    
+    .docs-section {
+      text-align: left;
+      margin-top: 30px;
+    }
+    
+    .docs-section h3 {
+      color: #667eea;
+      margin: 20px 0 10px 0;
+      font-size: 18px;
+    }
+    
+    .docs-section pre {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 12px;
+      margin: 10px 0;
+      border-left: 3px solid #667eea;
+      text-align: left;
+    }
+    
+    .docs-section code {
+      font-family: 'Courier New', monospace;
+    }
+    
+    .docs-section p {
+      color: #666;
+      margin: 10px 0;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    
+    .test-link {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 30px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      margin: 15px 0;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .test-link:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
   </style>
 </head>
 <body>
@@ -229,27 +280,41 @@
     </div>
     <h1>Socket Server</h1>
     <div class="subtitle">Real-time Communication Platform</div>
-    <div class="status">🟢 Server Running & Connected</div>
+    <div class="status"><i class="fas fa-circle" style="color: #10b981; margin-right: 8px;"></i>Server Running & Connected</div>
     
     <div class="info">
       <div class="info-title">Server Status</div>
-      <div class="info-content">Socket.IO server is running</div>
+      <div class="info-content">Socket.IO server is running on port 6002</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Quick Links -->
+    <div class="info" style="text-align: center;">
+      <div class="info-title">Quick Links</div>
+      <div class="info-content" style="margin-top: 15px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+        <a href="/docs" class="test-link" style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);"><i class="fas fa-book"></i> View Documentation</a>
+        <a href="/test" class="test-link"><i class="fas fa-flask"></i> Test Page</a>
+      </div>
+      <p style="margin-top: 20px; color: #666; font-size: 14px;">
+        Visit the documentation page for complete API reference, examples, and troubleshooting guide.
+      </p>
     </div>
     
     <div class="divider"></div>
     
     <div class="features">
       <div class="feature">
-        <strong>📡 Broadcasting</strong>
+        <strong><i class="fas fa-broadcast-tower"></i> Broadcasting</strong>
         Ready for real-time events
       </div>
       <div class="feature">
-        <strong>🔌 WebSocket</strong>
+        <strong><i class="fas fa-plug"></i> WebSocket</strong>
         Live connection support
       </div>
       <div class="feature">
-        <strong>🚀 Fast</strong>
-        Optimized performance
+        <strong><i class="fas fa-key"></i> Token Auth</strong>
+        Secure authentication
       </div>
     </div>
     

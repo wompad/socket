@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Socket.IO Token Test</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <style>
     body {
@@ -68,7 +69,7 @@
   </style>
 </head>
 <body>
-  <h1>🔌 Socket.IO Token Authentication Test</h1>
+  <h1><i class="fas fa-plug"></i> Socket.IO Token Authentication Test</h1>
 
   <!-- Step 1: Register to get token -->
   <div class="section">
@@ -85,7 +86,7 @@
   <!-- Step 2: Test Method 1 - auth object -->
   <div class="section">
     <h2>Test Method 1 (auth object)</h2>
-    <p><code>io('http://localhost:6001', { auth: { token: 'YOUR_TOKEN' } })</code></p>
+    <p><code id="method1Code">io('APP_URL', { auth: { token: 'YOUR_TOKEN' } })</code></p>
     <button onclick="connectMethod1()">Connect with Method 1</button>
     <button onclick="disconnectMethod1()">Disconnect</button>
     <div id="log1" class="log"></div>
@@ -94,7 +95,7 @@
   <!-- Step 3: Test Method 2 - query parameter -->
   <div class="section">
     <h2>Test Method 2 (query parameter)</h2>
-    <p><code>io('http://localhost:6001?token=YOUR_TOKEN')</code></p>
+    <p><code id="method2Code">io('APP_URL?token=YOUR_TOKEN')</code></p>
     <button onclick="connectMethod2()">Connect with Method 2</button>
     <button onclick="disconnectMethod2()">Disconnect</button>
     <div id="log2" class="log"></div>
@@ -103,15 +104,32 @@
   <!-- Test Socket.IO Features -->
   <div class="section">
     <h2>Test Socket.IO Features</h2>
-    <input type="text" id="channelName" placeholder="Channel name" value="test-channel">
+    <input type="text" id="channelName" placeholder="Channel name (e.g., channel-name)" value="channel-name">
     <button onclick="subscribeChannel()">Subscribe to Channel</button>
     <button onclick="sendBroadcast()">Send Broadcast Event</button>
     <div id="log3" class="log">
-      <div class="log-item info">📋 Instructions: 1) Connect with Method 1 or 2, 2) Subscribe to a channel, 3) Send broadcast via curl or use the button above</div>
+      <div class="log-item info">
+        <strong><i class="fas fa-info-circle"></i> Instructions:</strong><br>
+        1) Connect with Method 1 or 2<br>
+        2) Subscribe to the channel (e.g., "channel-name")<br>
+        3) Send broadcast via curl or use the button above<br>
+        <strong><i class="fas fa-exclamation-triangle"></i> Important:</strong> Make sure the channel name in the broadcast matches the channel you subscribed to!
+      </div>
     </div>
   </div>
 
   <script>
+    // Get APP_URL from window (injected by server)
+    const APP_URL = window.APP_URL || 'http://localhost:6002';
+    
+    // Update code examples with actual URL
+    document.addEventListener('DOMContentLoaded', () => {
+      const method1Code = document.getElementById('method1Code');
+      const method2Code = document.getElementById('method2Code');
+      if (method1Code) method1Code.textContent = `io('${APP_URL}', { auth: { token: 'YOUR_TOKEN' } })`;
+      if (method2Code) method2Code.textContent = `io('${APP_URL}?token=YOUR_TOKEN')`;
+    });
+    
     let token = '25f03678c5db2a4960da7c72b0be629d55e519eba6f9eb3c48a40d7af56883c1';
     let socket1 = null;
     let socket2 = null;
@@ -139,8 +157,8 @@
           token = data.user.token;
           document.getElementById('tokenValue').textContent = token;
           document.getElementById('tokenDisplay').style.display = 'block';
-          addLog('log1', '✅ Registration successful! Token saved.', 'success');
-          addLog('log2', '✅ Registration successful! Token saved.', 'success');
+          addLog('log1', '[OK] Registration successful! Token saved.', 'success');
+          addLog('log2', '[OK] Registration successful! Token saved.', 'success');
         } else {
           alert('Registration failed: ' + data.error);
         }
@@ -160,36 +178,31 @@
         socket1.disconnect();
       }
 
-      addLog('log1', '🔄 Connecting with Method 1 (auth object)...', 'info');
+      addLog('log1', '[...] Connecting with Method 1 (auth object)...', 'info');
 
-      socket1 = io('http://localhost:6001', {
+      socket1 = io(APP_URL, {
         auth: {
           token: token
         }
       });
 
       socket1.on('connect', () => {
-        addLog('log1', `✅ Connected! Socket ID: ${socket1.id}`, 'success');
+        addLog('log1', `[OK] Connected! Socket ID: ${socket1.id}`, 'success');
       });
 
       socket1.on('disconnect', (reason) => {
-        addLog('log1', `❌ Disconnected: ${reason}`, 'error');
+        addLog('log1', `[X] Disconnected: ${reason}`, 'error');
       });
 
       socket1.on('connect_error', (error) => {
-        addLog('log1', `❌ Connection Error: ${error.message}`, 'error');
+        addLog('log1', `[X] Connection Error: ${error.message}`, 'error');
       });
 
-      // Listen for any events
+      // Listen for any events (this will catch all broadcasts)
       socket1.onAny((eventName, ...args) => {
-        addLog('log1', `📨 Received event "${eventName}": ${JSON.stringify(args)}`, 'info');
-        addLog('log3', `📨 Received event "${eventName}": ${JSON.stringify(args)}`, 'info');
-      });
-
-      // Listen for specific "message" event (from broadcast)
-      socket1.on('message', (data) => {
-        addLog('log1', `📬 Broadcast message received: ${JSON.stringify(data)}`, 'success');
-        addLog('log3', `📬 Broadcast message received: ${JSON.stringify(data)}`, 'success');
+        const logMessage = `[MSG] Received event "${eventName}": ${JSON.stringify(args)}`;
+        addLog('log1', logMessage, 'success');
+        addLog('log3', logMessage, 'success');
       });
     }
 
@@ -197,7 +210,7 @@
       if (socket1) {
         socket1.disconnect();
         socket1 = null;
-        addLog('log1', '🔌 Disconnected Method 1', 'info');
+        addLog('log1', '[DISCONNECT] Disconnected Method 1', 'info');
       }
     }
 
@@ -212,32 +225,27 @@
         socket2.disconnect();
       }
 
-      addLog('log2', '🔄 Connecting with Method 2 (query parameter)...', 'info');
+      addLog('log2', '[...] Connecting with Method 2 (query parameter)...', 'info');
 
-      socket2 = io(`http://localhost:6001?token=${token}`);
+      socket2 = io(`${APP_URL}?token=${token}`);
 
       socket2.on('connect', () => {
-        addLog('log2', `✅ Connected! Socket ID: ${socket2.id}`, 'success');
+        addLog('log2', `[OK] Connected! Socket ID: ${socket2.id}`, 'success');
       });
 
       socket2.on('disconnect', (reason) => {
-        addLog('log2', `❌ Disconnected: ${reason}`, 'error');
+        addLog('log2', `[X] Disconnected: ${reason}`, 'error');
       });
 
       socket2.on('connect_error', (error) => {
-        addLog('log2', `❌ Connection Error: ${error.message}`, 'error');
+        addLog('log2', `[X] Connection Error: ${error.message}`, 'error');
       });
 
-      // Listen for any events
+      // Listen for any events (this will catch all broadcasts)
       socket2.onAny((eventName, ...args) => {
-        addLog('log2', `📨 Received event "${eventName}": ${JSON.stringify(args)}`, 'info');
-        addLog('log3', `📨 Received event "${eventName}": ${JSON.stringify(args)}`, 'info');
-      });
-
-      // Listen for specific "message" event (from broadcast)
-      socket2.on('message', (data) => {
-        addLog('log2', `📬 Broadcast message received: ${JSON.stringify(data)}`, 'success');
-        addLog('log3', `📬 Broadcast message received: ${JSON.stringify(data)}`, 'success');
+        const logMessage = `[MSG] Received event "${eventName}": ${JSON.stringify(args)}`;
+        addLog('log2', logMessage, 'success');
+        addLog('log3', logMessage, 'success');
       });
     }
 
@@ -245,7 +253,7 @@
       if (socket2) {
         socket2.disconnect();
         socket2 = null;
-        addLog('log2', '🔌 Disconnected Method 2', 'info');
+        addLog('log2', '[DISCONNECT] Disconnected Method 2', 'info');
       }
     }
 
@@ -265,8 +273,9 @@
       }
 
       activeSocket.emit('subscribe', channel);
-      addLog('log3', `📡 Subscribed to channel: ${channel}`, 'info');
-      addLog('log3', `⏳ Waiting for broadcasts on channel: ${channel}...`, 'info');
+      addLog('log3', `[SUBSCRIBE] Subscribed to channel: "${channel}"`, 'success');
+      addLog('log3', `[WAIT] Waiting for broadcasts on channel: "${channel}"...`, 'info');
+      addLog('log3', `[TIP] Use the same channel name in your curl command!`, 'info');
     }
 
     function sendBroadcast() {
@@ -287,7 +296,7 @@
         }
       });
 
-      addLog('log3', `📢 Sent broadcast to channel: ${channel}`, 'info');
+      addLog('log3', `[SEND] Sent broadcast to channel: ${channel}`, 'info');
     }
 
     function addLog(logId, message, type = 'info') {

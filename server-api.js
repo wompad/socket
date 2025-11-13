@@ -1,6 +1,64 @@
+/**
+ * ============================================
+ * Socket.IO Server with Token Authentication & SSO
+ * ============================================
+ * 
+ * This server provides:
+ * - User registration with token-based authentication
+ * - Socket.IO real-time communication with token validation
+ * - Broadcast API endpoint for sending messages to channels
+ * - SQLite database for user management
+ * - SSO (Single Sign-On) authentication for protected routes
+ * 
+ * API Endpoints:
+ * - POST /register - Register a new user and get authentication token
+ * - POST /broadcast - Broadcast message to a channel (requires token)
+ * - GET / - Homepage with API documentation
+ * - GET /test - Interactive test page for Socket.IO (Protected with SSO)
+ * - GET /docs - API documentation page
+ * 
+ * SSO Endpoints:
+ * - GET /sso/login - Redirect to SSO provider login
+ * - GET /sso/callback - Handle SSO authentication callback
+ * - GET /sso/logout - Logout and destroy session
+ * 
+ * Socket.IO Events:
+ * - subscribe - Join a channel (room)
+ * - leave - Leave a channel (room)
+ * - broadcast-event - Broadcast event to other clients in a channel
+ * 
+ * Authentication:
+ * - All Socket.IO connections require a valid token
+ * - Token can be provided via auth.token or query.token
+ * - API endpoints (except /register, /, /test, /docs) require token in:
+ *   - Authorization header: "Bearer <token>"
+ *   - Request body: { "token": "<token>" }
+ *   - Query parameter: ?token=<token>
+ * - /test route requires SSO authentication via session
+ * 
+ * SSO Configuration:
+ * - Configure SSO settings via environment variables or SSO_CONFIG object
+ * - SSO_BASE_URL - SSO provider base URL
+ * - SSO_LOGIN_URL - SSO login endpoint
+ * - SSO_CALLBACK_URL - Callback URL for SSO response
+ * - SSO_VALIDATE_URL - Token validation endpoint
+ * - SSO_LOGOUT_URL - SSO logout endpoint
+ * - SSO_CLIENT_ID - OAuth client ID (REQUIRED)
+ * - SSO_CLIENT_SECRET - OAuth client secret (if required)
+ * - SSO_RESPONSE_TYPE - OAuth response type (default: 'code')
+ * - SSO_SCOPE - OAuth scope (default: 'openid profile email')
+ * - SESSION_SECRET - Session secret for cookie encryption
+ * 
+ * @author ITO I Julieto Ompad
+ * @version 2.0.0
+ */
+
 // ===============================
 // 📦 Dependencies
 // ===============================
+// Load environment variables from .env file
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -9,6 +67,8 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 const crypto = require('crypto');
+const session = require('express-session');
+const axios = require('axios');
 
 // ===============================
 // 🗄️ SQLite Database Setup
@@ -40,18 +100,84 @@ function validateToken(token) {
 }
 
 // ===============================
+// 🔐 SSO Configuration
+// ===============================
+// Configure SSO settings - Update these with actual SSO provider details
+const SSO_CONFIG = {
+  // SSO Provider Base URL (e.g., https://caraga-connect.dswd.gov.ph)
+  baseUrl: process.env.SSO_BASE_URL || 'https://caraga-connect.dswd.gov.ph',
+  // SSO Login Endpoint
+  loginUrl: process.env.SSO_LOGIN_URL || 'https://caraga-connect.dswd.gov.ph/sso/login',
+  // SSO Callback URL (this server's callback endpoint)
+  callbackUrl: process.env.SSO_CALLBACK_URL || 'http://localhost:6002/sso/callback',
+  // SSO Token Validation Endpoint
+  validateUrl: process.env.SSO_VALIDATE_URL || 'https://caraga-connect.dswd.gov.ph/sso/validate',
+  // SSO Logout URL
+  logoutUrl: process.env.SSO_LOGOUT_URL || 'https://caraga-connect.dswd.gov.ph/sso/logout',
+  // OAuth Client ID (REQUIRED - Get this from SSO provider)
+  clientId: process.env.SSO_CLIENT_ID || '',
+  // OAuth Client Secret (if required for token exchange)
+  clientSecret: process.env.SSO_CLIENT_SECRET || '',
+  // OAuth Response Type (usually 'code' for authorization code flow)
+  responseType: process.env.SSO_RESPONSE_TYPE || 'code',
+  // OAuth Scope (optional, adjust based on SSO provider requirements)
+  scope: process.env.SSO_SCOPE || 'openid profile email',
+  // Session secret (use a strong secret in production)
+  sessionSecret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
+  // Session cookie name
+  sessionName: process.env.SESSION_NAME || 'sso.session'
+};
+
+// Application URL from environment
+const APP_URL = process.env.APP_URL || 'http://localhost:6002';
+
+// ===============================
 // ⚙️ Express Setup
 // ===============================
 const app = express();
-app.use(cors());           // Allow all origins (change in production if needed)
+
+// Session configuration
+app.use(session({
+  name: SSO_CONFIG.sessionName,
+  secret: SSO_CONFIG.sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production (HTTPS)
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+app.use(cors({
+  origin: true,
+  credentials: true // Allow cookies
+}));
 app.use(express.json());   // Parse JSON body from Laravel
+app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
 // ===============================
-// 🔐 Token Authentication Middleware
+// 🔐 SSO Authentication Middleware
+// ===============================
+const requireSSO = async (req, res, next) => {
+  // Check if user is authenticated via SSO session
+  if (req.session && req.session.ssoUser) {
+    req.user = req.session.ssoUser;
+    return next();
+  }
+
+  // If not authenticated, redirect to SSO login
+  // Store the original URL to redirect back after login
+  req.session.returnTo = req.originalUrl || req.url;
+  return res.redirect('/sso/login');
+};
+
+// ===============================
+// 🔐 Token Authentication Middleware (for API endpoints)
 // ===============================
 const authenticateToken = (req, res, next) => {
-  // Skip authentication for registration, root route, and test page
-  if (req.path === '/register' || req.path === '/' || req.path === '/test') {
+  // Skip authentication for registration, root route, SSO routes, test page, and docs page
+  if (req.path === '/register' || req.path === '/' || req.path.startsWith('/sso/') || req.path === '/test' || req.path === '/docs') {
     return next();
   }
 
@@ -76,9 +202,12 @@ const authenticateToken = (req, res, next) => {
   next();
 };
 
-// Apply authentication middleware to all routes except registration, root, and test page
+// Apply token authentication middleware to API routes (not SSO routes)
 app.use((req, res, next) => {
-  if (req.path === '/register' || req.path === '/' || req.path === '/test') {
+  if (req.path.startsWith('/sso/')) {
+    return next();
+  }
+  if (req.path === '/register' || req.path === '/' || req.path === '/test' || req.path === '/docs') {
     return next();
   }
   authenticateToken(req, res, next);
@@ -206,6 +335,15 @@ app.post('/broadcast', (req, res) => {
 });
 
 // ===============================
+// 🔧 Helper: Inject APP_URL into HTML
+// ===============================
+function injectAppUrl(html) {
+  // Inject APP_URL as a JavaScript variable before closing </head> tag
+  const scriptTag = `<script>window.APP_URL = '${APP_URL}';</script>`;
+  return html.replace('</head>', `${scriptTag}\n</head>`);
+}
+
+// ===============================
 // 🧭 Root Test Route
 // ===============================
 app.get('/', (req, res) => {
@@ -215,21 +353,193 @@ app.get('/', (req, res) => {
       console.error('Error reading view file:', err);
       return res.status(500).send('Error loading page');
     }
-    res.send(data);
+    res.send(injectAppUrl(data));
   });
 });
 
 // ===============================
-// 🧪 Test Page Route
+// 🔐 SSO Routes
 // ===============================
-app.get('/test', (req, res) => {
+
+// SSO Login - Redirect to SSO provider
+app.get('/sso/login', (req, res) => {
+  // Validate required OAuth parameters
+  if (!SSO_CONFIG.clientId) {
+    console.error('❌ SSO_CLIENT_ID is required. Please set it in environment variables or SSO_CONFIG.');
+    return res.status(500).send(`
+      <html>
+        <head><title>SSO Configuration Error</title></head>
+        <body style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+          <h1 style="color: #dc3545;">SSO Configuration Error</h1>
+          <p>SSO_CLIENT_ID is required but not configured.</p>
+          <p>Please set the <code>SSO_CLIENT_ID</code> environment variable or update <code>SSO_CONFIG.clientId</code> in server-api.js</p>
+          <p><a href="/">Return to Home</a></p>
+        </body>
+      </html>
+    `);
+  }
+
+  // Build SSO login URL with callback parameter
+  const returnTo = req.query.returnTo || req.session.returnTo || '/test';
+  req.session.returnTo = returnTo;
+  
+  // Generate state parameter for CSRF protection
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.ssoState = state;
+  
+  // Construct SSO login URL with required OAuth parameters
+  const params = new URLSearchParams({
+    client_id: SSO_CONFIG.clientId,
+    redirect_uri: SSO_CONFIG.callbackUrl,
+    response_type: SSO_CONFIG.responseType,
+    scope: SSO_CONFIG.scope,
+    state: state
+  });
+  
+  const ssoLoginUrl = `${SSO_CONFIG.loginUrl}?${params.toString()}`;
+  
+  console.log(`🔐 Redirecting to SSO login: ${SSO_CONFIG.loginUrl}`);
+  console.log(`   Client ID: ${SSO_CONFIG.clientId}`);
+  console.log(`   Redirect URI: ${SSO_CONFIG.callbackUrl}`);
+  res.redirect(ssoLoginUrl);
+});
+
+// SSO Callback - Handle SSO response
+app.get('/sso/callback', async (req, res) => {
+  try {
+    const { token, code, state, error, error_description } = req.query;
+    
+    // Check for OAuth errors
+    if (error) {
+      console.error(`❌ SSO OAuth error: ${error} - ${error_description || 'No description'}`);
+      return res.redirect(`/sso/login?error=${encodeURIComponent(error)}`);
+    }
+    
+    // Validate state parameter (CSRF protection)
+    if (state && req.session.ssoState !== state) {
+      console.error('❌ SSO state mismatch - possible CSRF attack');
+      return res.redirect('/sso/login?error=invalid_state');
+    }
+    delete req.session.ssoState;
+    
+    // Validate SSO token/code with SSO provider
+    // This is a generic implementation - adjust based on actual SSO provider
+    let ssoToken = token || code;
+    
+    if (!ssoToken) {
+      console.error('❌ SSO callback missing token/code');
+      return res.redirect('/sso/login?error=missing_token');
+    }
+
+    // Validate token with SSO provider
+    try {
+      const validateResponse = await axios.get(SSO_CONFIG.validateUrl, {
+        params: { token: ssoToken },
+        headers: {
+          'Accept': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      // Extract user information from SSO response
+      // Adjust based on actual SSO provider response structure
+      const userData = validateResponse.data;
+      
+      if (!userData || !userData.user) {
+        throw new Error('Invalid SSO response');
+      }
+
+      // Store user in session
+      req.session.ssoUser = {
+        id: userData.user.id || userData.user.email,
+        email: userData.user.email,
+        name: userData.user.name || userData.user.display_name || userData.user.email,
+        token: ssoToken,
+        authenticatedAt: new Date().toISOString()
+      };
+
+      console.log(`✅ SSO authentication successful for: ${req.session.ssoUser.email}`);
+
+      // Redirect to original destination or test page
+      const returnTo = req.session.returnTo || '/test';
+      delete req.session.returnTo;
+      res.redirect(returnTo);
+
+    } catch (validateError) {
+      console.error('❌ SSO token validation failed:', validateError.message);
+      
+      // If validation endpoint doesn't exist or returns error, 
+      // you can implement a fallback validation method here
+      // For now, we'll create a basic session for testing
+      // REMOVE THIS IN PRODUCTION - Replace with actual SSO validation
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('⚠️ Using fallback SSO validation (development only)');
+        req.session.ssoUser = {
+          id: 'sso-user-' + Date.now(),
+          email: 'user@dswd.gov.ph',
+          name: 'SSO User',
+          token: ssoToken,
+          authenticatedAt: new Date().toISOString()
+        };
+        const returnTo = req.session.returnTo || '/test';
+        delete req.session.returnTo;
+        return res.redirect(returnTo);
+      }
+      
+      return res.redirect('/sso/login?error=validation_failed');
+    }
+
+  } catch (error) {
+    console.error('❌ SSO callback error:', error);
+    res.redirect('/sso/login?error=callback_error');
+  }
+});
+
+// SSO Logout
+app.get('/sso/logout', (req, res) => {
+  const ssoToken = req.session.ssoUser?.token;
+  
+  // Destroy session
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('❌ Session destroy error:', err);
+    }
+    
+    // Redirect to SSO logout (if token exists) or home page
+    if (ssoToken && SSO_CONFIG.logoutUrl) {
+      const logoutUrl = `${SSO_CONFIG.logoutUrl}?token=${encodeURIComponent(ssoToken)}&redirect_uri=${encodeURIComponent(APP_URL + '/')}`;
+      res.redirect(logoutUrl);
+    } else {
+      res.redirect('/');
+    }
+  });
+});
+
+// ===============================
+// 🧪 Test Page Route (Protected with SSO)
+// ===============================
+app.get('/test', requireSSO, (req, res) => {
   const viewPath = path.join(__dirname, 'views', 'test.html');
   fs.readFile(viewPath, 'utf8', (err, data) => {
     if (err) {
       console.error('Error reading test file:', err);
       return res.status(500).send('Error loading test page');
     }
-    res.send(data);
+    res.send(injectAppUrl(data));
+  });
+});
+
+// ===============================
+// 📚 Documentation Page Route
+// ===============================
+app.get('/docs', (req, res) => {
+  const viewPath = path.join(__dirname, 'views', 'docs.html');
+  fs.readFile(viewPath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Error reading docs file:', err);
+      return res.status(500).send('Error loading documentation page');
+    }
+    res.send(injectAppUrl(data));
   });
 });
 
@@ -240,4 +550,7 @@ const PORT = 6002;
 server.listen(PORT, () => {
   console.log(`🚀 Socket.IO server running on port:${PORT}`);
   console.log(`🔗 Ready for requests at /broadcast`);
+  console.log(`🏠 Homepage: http://localhost:${PORT}/`);
+  console.log(`📚 Documentation: http://localhost:${PORT}/docs`);
+  console.log(`🧪 Test Page: http://localhost:${PORT}/test`);
 });
