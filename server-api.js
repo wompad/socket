@@ -279,25 +279,138 @@ io.on('connection', (socket) => {
 // 👤 User Registration Endpoint
 // ===============================
 app.post('/register', (req, res) => {
+  console.log('📝 Registration request received');
+  console.log('   Request body:', JSON.stringify(req.body));
+  console.log('   Request headers:', JSON.stringify(req.headers));
+  
   const { name, purpose } = req.body;
 
+  // Validate input
   if (!name || !purpose) {
-    return res.status(400).json({ error: 'Name and purpose are required' });
+    console.warn('⚠️ Registration failed: Missing required fields');
+    console.log('   Name provided:', name ? `"${name}"` : 'MISSING');
+    console.log('   Purpose provided:', purpose ? `"${purpose}"` : 'MISSING');
+    return res.status(400).json({ 
+      error: 'Name and purpose are required',
+      details: {
+        name: name ? 'provided' : 'missing',
+        purpose: purpose ? 'provided' : 'missing'
+      }
+    });
+  }
+
+  // Validate input types and lengths
+  if (typeof name !== 'string' || typeof purpose !== 'string') {
+    console.warn('⚠️ Registration failed: Invalid input types');
+    console.log('   Name type:', typeof name);
+    console.log('   Purpose type:', typeof purpose);
+    return res.status(400).json({ 
+      error: 'Name and purpose must be strings',
+      details: {
+        nameType: typeof name,
+        purposeType: typeof purpose
+      }
+    });
+  }
+
+  if (name.trim().length === 0 || purpose.trim().length === 0) {
+    console.warn('⚠️ Registration failed: Empty strings after trim');
+    console.log('   Name length:', name.length, 'Trimmed length:', name.trim().length);
+    console.log('   Purpose length:', purpose.length, 'Trimmed length:', purpose.trim().length);
+    return res.status(400).json({ 
+      error: 'Name and purpose cannot be empty',
+      details: {
+        nameLength: name.length,
+        purposeLength: purpose.length
+      }
+    });
+  }
+
+  console.log(`🔄 Starting registration for: "${name}" with purpose: "${purpose}"`);
+
+  // Check database connection
+  try {
+    db.prepare('SELECT 1').get();
+    console.log('✅ Database connection verified');
+  } catch (dbError) {
+    console.error('❌ Database connection check failed:', dbError);
+    console.error('   Error name:', dbError.name);
+    console.error('   Error message:', dbError.message);
+    console.error('   Error code:', dbError.code);
+    if (dbError.stack) {
+      console.error('   Stack trace:', dbError.stack);
+    }
+    return res.status(500).json({ 
+      error: 'Database connection failed',
+      details: {
+        errorName: dbError.name,
+        errorMessage: dbError.message,
+        errorCode: dbError.code
+      }
+    });
   }
 
   // Generate unique token
+  console.log('🔑 Generating unique token...');
   let token;
   let isUnique = false;
-  while (!isUnique) {
+  let tokenAttempts = 0;
+  const maxTokenAttempts = 10;
+  
+  while (!isUnique && tokenAttempts < maxTokenAttempts) {
+    tokenAttempts++;
     token = generateToken();
-    const existing = db.prepare('SELECT id FROM users WHERE token = ?').get(token);
-    if (!existing) isUnique = true;
+    console.log(`   Attempt ${tokenAttempts}: Generated token (${token.length} chars)`);
+    
+    try {
+      const existing = db.prepare('SELECT id FROM users WHERE token = ?').get(token);
+      if (!existing) {
+        isUnique = true;
+        console.log(`✅ Unique token generated on attempt ${tokenAttempts}`);
+      } else {
+        console.log(`   Token collision detected, retrying...`);
+      }
+    } catch (checkError) {
+      console.error('❌ Error checking token uniqueness:', checkError);
+      console.error('   Error name:', checkError.name);
+      console.error('   Error message:', checkError.message);
+      return res.status(500).json({ 
+        error: 'Failed to validate token uniqueness',
+        details: {
+          errorName: checkError.name,
+          errorMessage: checkError.message,
+          tokenAttempts: tokenAttempts
+        }
+      });
+    }
+  }
+
+  if (!isUnique) {
+    console.error(`❌ Failed to generate unique token after ${maxTokenAttempts} attempts`);
+    return res.status(500).json({ 
+      error: 'Failed to generate unique token',
+      details: {
+        attempts: tokenAttempts,
+        maxAttempts: maxTokenAttempts
+      }
+    });
   }
 
   // Insert user into database
+  console.log('💾 Inserting user into database...');
+  console.log('   Name:', name);
+  console.log('   Purpose:', purpose);
+  console.log('   Token:', token.substring(0, 8) + '...' + token.substring(token.length - 8));
+  
   try {
-    const result = db.prepare('INSERT INTO users (name, purpose, token) VALUES (?, ?, ?)').run(name, purpose, token);
-    console.log(`✅ New user registered: ${name} (ID: ${result.lastInsertRowid})`);
+    const insertStmt = db.prepare('INSERT INTO users (name, purpose, token) VALUES (?, ?, ?)');
+    const result = insertStmt.run(name, purpose, token);
+    
+    console.log(`✅ New user registered successfully`);
+    console.log('   User ID:', result.lastInsertRowid);
+    console.log('   Changes:', result.changes);
+    console.log('   Name:', name);
+    console.log('   Purpose:', purpose);
     
     res.status(201).json({
       success: true,
@@ -310,8 +423,84 @@ app.post('/register', (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Registration error:', error);
-    res.status(500).json({ error: 'Failed to register user' });
+    console.error('❌ Registration error occurred:');
+    console.error('   Error name:', error.name);
+    console.error('   Error message:', error.message);
+    console.error('   Error code:', error.code);
+    console.error('   Error errno:', error.errno);
+    console.error('   Error syscall:', error.syscall);
+    
+    // Log SQLite specific errors
+    if (error.code) {
+      console.error('   SQLite error code:', error.code);
+    }
+    
+    // Log the attempted values
+    console.error('   Attempted values:');
+    console.error('     Name:', name);
+    console.error('     Purpose:', purpose);
+    console.error('     Token length:', token ? token.length : 'N/A');
+    
+    // Log stack trace for debugging
+    if (error.stack) {
+      console.error('   Stack trace:', error.stack);
+    }
+    
+    // Check for specific error types
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      console.error('   ⚠️ Unique constraint violation - token already exists');
+      return res.status(409).json({ 
+        error: 'Token collision detected (this should not happen)',
+        details: {
+          errorCode: error.code,
+          errorMessage: error.message
+        }
+      });
+    }
+    
+    if (error.code === 'SQLITE_CONSTRAINT_NOTNULL') {
+      console.error('   ⚠️ NOT NULL constraint violation');
+      return res.status(400).json({ 
+        error: 'Required field is missing',
+        details: {
+          errorCode: error.code,
+          errorMessage: error.message
+        }
+      });
+    }
+    
+    if (error.code === 'SQLITE_READONLY') {
+      console.error('   ⚠️ Database is read-only');
+      return res.status(500).json({ 
+        error: 'Database is read-only',
+        details: {
+          errorCode: error.code,
+          errorMessage: error.message
+        }
+      });
+    }
+    
+    if (error.code === 'SQLITE_BUSY') {
+      console.error('   ⚠️ Database is locked/busy');
+      return res.status(503).json({ 
+        error: 'Database is temporarily unavailable',
+        details: {
+          errorCode: error.code,
+          errorMessage: error.message
+        }
+      });
+    }
+    
+    // Generic error response
+    res.status(500).json({ 
+      error: 'Failed to register user',
+      details: {
+        errorName: error.name,
+        errorMessage: error.message,
+        errorCode: error.code || 'UNKNOWN',
+        timestamp: new Date().toISOString()
+      }
+    });
   }
 });
 
