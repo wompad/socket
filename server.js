@@ -87,7 +87,7 @@ app.get('/', (req, res) => {
 // ===============================
 // 🚀 Start Server
 // ===============================
-const PORT = 6001;
+const PORT = 80;
 server.listen(PORT, () => {
   console.log(`🚀 Socket.IO server running on port:${PORT}`);
   console.log(`🔗 Ready for requests at /broadcast`);
