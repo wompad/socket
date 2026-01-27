@@ -240,11 +240,28 @@ socketio-server/
 
 ## Testing
 
-Use the interactive test page at http://localhost:6002/test to:
+Use the interactive test page at http://localhost:6002/test (or port 6001 for server.js) to:
 - Register new users
 - Test Socket.IO connections (both methods)
 - Subscribe to channels
 - Send and receive broadcasts
+- **Test the `/broadcast` HTTP endpoint directly** with a visual interface
+
+### Testing the /broadcast Endpoint
+
+The test page now includes a dedicated section to test the `/broadcast` HTTP POST endpoint:
+
+1. **Navigate to the test page**: http://localhost:6001/test (or 6002 for server-api.js)
+2. **Connect and Subscribe**: First, connect to Socket.IO using Method 1 or 2, then subscribe to a channel
+3. **Use the HTTP Endpoint Tester**: 
+   - Scroll to the "Test /broadcast HTTP Endpoint" section
+   - Enter the channel name (must match your subscription)
+   - Enter the event name (e.g., "notification", "message")
+   - Enter JSON data
+   - Click "Send HTTP POST to /broadcast"
+4. **Watch for results**: The broadcast will be sent via HTTP POST and you'll see it arrive in your Socket.IO connection
+
+This simulates exactly how Laravel or other backends would send broadcasts to the Socket.IO server.
 
 ## Author
 
