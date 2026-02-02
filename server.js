@@ -176,7 +176,7 @@ app.get('/docs', (req, res) => {
 // ===============================
 // 🚀 Start Server
 // ===============================
-const PORT = 6001;
+const PORT = 6002;
 server.listen(PORT, () => {
   console.log(`🚀 Socket.IO server running on port:${PORT}`);
   console.log(`🔗 Ready for requests at /broadcast`);
