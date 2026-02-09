@@ -88,7 +88,7 @@ app.post('/broadcast', (req, res) => {
 // ===============================
 // 🧭 Routes
 // ===============================
-app.get('/socket', (req, res) => {
+app.get('/socket-ui', (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -173,7 +173,7 @@ app.get('/socket', (req, res) => {
   `);
 });
 
-app.get('/socket/test', (req, res) => {
+app.get('/socket-ui/test', (req, res) => {
   const html = fs.readFileSync(__dirname + '/views/test.html', 'utf-8');
   const injectedHtml = html.replace(
     '<script>',
@@ -182,7 +182,7 @@ app.get('/socket/test', (req, res) => {
   res.send(injectedHtml);
 });
 
-app.get('/socket/docs', (req, res) => {
+app.get('/socket-ui/docs', (req, res) => {
   const html = fs.readFileSync(__dirname + '/views/docs.html', 'utf-8');
   const injectedHtml = html.replace(
     '<script>',
