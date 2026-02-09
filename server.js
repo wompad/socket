@@ -1,10 +1,12 @@
 // ===============================
 // 📦 Dependencies
 // ===============================
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const fs = require('fs');
 
 // ===============================
 // ⚙️ Express Setup
@@ -12,6 +14,12 @@ const cors = require('cors');
 const app = express();
 app.use(cors());           // Allow all origins (change in production if needed)
 app.use(express.json());   // Parse JSON body from Laravel
+
+// ===============================
+// ⚙️ Configuration
+// ===============================
+const PORT = process.env.PORT || 6001;
+const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 
 // ===============================
 // 🌐 Create HTTP + Socket.IO Server
@@ -80,7 +88,7 @@ app.post('/broadcast', (req, res) => {
 // ===============================
 // 🧭 Routes
 // ===============================
-app.get('/', (req, res) => {
+app.get('/socket', (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -156,8 +164,8 @@ app.get('/', (req, res) => {
         </div>
 
         <div class="links">
-          <a href="/test"><i class="fas fa-flask"></i> Test Page</a>
-          <a href="/docs"><i class="fas fa-book"></i> Documentation</a>
+          <a href="/socket/test"><i class="fas fa-flask"></i> Test Page</a>
+          <a href="/socket/docs"><i class="fas fa-book"></i> Documentation</a>
         </div>
       </div>
     </body>
@@ -165,19 +173,29 @@ app.get('/', (req, res) => {
   `);
 });
 
-app.get('/test', (req, res) => {
-  res.sendFile(__dirname + '/views/test.html');
+app.get('/socket/test', (req, res) => {
+  const html = fs.readFileSync(__dirname + '/views/test.html', 'utf-8');
+  const injectedHtml = html.replace(
+    '<script>',
+    `<script>\n    window.APP_URL = '${APP_URL}';`
+  );
+  res.send(injectedHtml);
 });
 
-app.get('/docs', (req, res) => {
-  res.sendFile(__dirname + '/views/docs.html');
+app.get('/socket/docs', (req, res) => {
+  const html = fs.readFileSync(__dirname + '/views/docs.html', 'utf-8');
+  const injectedHtml = html.replace(
+    '<script>',
+    `<script>\n    window.APP_URL = '${APP_URL}';`
+  );
+  res.send(injectedHtml);
 });
 
 // ===============================
 // 🚀 Start Server
 // ===============================
-const PORT = 6002;
 server.listen(PORT, () => {
   console.log(`🚀 Socket.IO server running on port:${PORT}`);
+  console.log(`🔗 App URL: ${APP_URL}`);
   console.log(`🔗 Ready for requests at /broadcast`);
 });

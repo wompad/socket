@@ -16,12 +16,38 @@ A real-time Socket.IO server with token-based authentication, SQLite database, a
 npm install
 ```
 
+## Configuration
+
+Create a `.env` file in the root directory with the following content:
+
+```env
+# Server Configuration
+PORT=6001
+
+# App URL (optional - defaults to http://localhost:{PORT})
+# Uncomment and modify if you need a custom URL
+# APP_URL=http://localhost:6001
+# APP_URL=https://your-domain.com
+```
+
+**To get started quickly:**
+1. Create a new file named `.env` in the root directory
+2. Copy the configuration above
+3. Adjust the `PORT` if needed (or leave as default)
+
+**Environment Variables:**
+- `PORT` - Server port (default: 6001)
+- `APP_URL` - Full application URL (default: http://localhost:{PORT})
+  - The APP_URL is automatically injected into the test and documentation pages
+  - If not set, it defaults to `http://localhost:{PORT}`
+
 ## Dependencies
 
 - `express` - Web framework
 - `socket.io` - Real-time communication
 - `better-sqlite3` - SQLite database
 - `cors` - Cross-origin resource sharing
+- `dotenv` - Environment variable management
 - `crypto` - Token generation (built-in)
 
 ## Usage
@@ -29,16 +55,19 @@ npm install
 ### Start the Server
 
 ```bash
-node server-api.js
+node server.js
 ```
 
-The server will start on port **6002** by default.
+The server will start on the port specified in your `.env` file (default: **6001**).
 
 ### Access Points
 
-- **Homepage**: http://localhost:6002/
-- **Test Page**: http://localhost:6002/test
-- **API Base**: http://localhost:6002/
+- **Homepage**: http://localhost:6001/ (or your configured PORT)
+- **Test Page**: http://localhost:6001/test
+- **Documentation**: http://localhost:6001/docs
+- **API Base**: http://localhost:6001/
+
+The APP_URL is automatically injected into the frontend pages from your environment configuration.
 
 ## API Documentation
 
@@ -50,10 +79,12 @@ Register a new user and receive an authentication token.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:6002/register \
+curl -X POST http://localhost:6001/register \
   -H "Content-Type: application/json" \
   -d '{"name":"Your Name","purpose":"Your Purpose"}'
 ```
+
+*(Replace `6001` with your configured PORT)*
 
 **Response:**
 ```json
@@ -84,7 +115,7 @@ Send a broadcast message to all clients subscribed to a channel.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:6002/broadcast \
+curl -X POST http://localhost:6001/broadcast \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -d '{
@@ -95,6 +126,8 @@ curl -X POST http://localhost:6002/broadcast \
     }
   }'
 ```
+
+*(Replace `6001` with your configured PORT)*
 
 **Response:**
 ```json
@@ -110,18 +143,22 @@ Connect to Socket.IO with token authentication.
 #### Method 1: Using auth object (Recommended)
 
 ```javascript
-const socket = io('http://localhost:6002', {
+const socket = io('http://localhost:6001', {
   auth: {
     token: 'YOUR_TOKEN_HERE'
   }
 });
 ```
 
+*(Replace `6001` with your configured PORT)*
+
 #### Method 2: Using query parameter
 
 ```javascript
-const socket = io('http://localhost:6002?token=YOUR_TOKEN_HERE');
+const socket = io('http://localhost:6001?token=YOUR_TOKEN_HERE');
 ```
+
+*(Replace `6001` with your configured PORT)*
 
 ### 4. Socket.IO Events
 
@@ -204,7 +241,7 @@ socketio-server/
 
 1. **Register a user:**
    ```bash
-   curl -X POST http://localhost:6002/register \
+   curl -X POST http://localhost:6001/register \
      -H "Content-Type: application/json" \
      -d '{"name":"Test User","purpose":"Testing"}'
    ```
@@ -213,7 +250,7 @@ socketio-server/
 
 3. **Connect to Socket.IO:**
    ```javascript
-   const socket = io('http://localhost:6002', {
+   const socket = io('http://localhost:6001', {
      auth: { token: 'YOUR_TOKEN' }
    });
    ```
@@ -225,7 +262,7 @@ socketio-server/
 
 5. **Send a broadcast:**
    ```bash
-   curl -X POST http://localhost:6002/broadcast \
+   curl -X POST http://localhost:6001/broadcast \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer YOUR_TOKEN" \
      -d '{"channel":"test-channel","event":"message","data":{"text":"Hello"}}'
@@ -238,9 +275,11 @@ socketio-server/
    });
    ```
 
+*(Replace `6001` with your configured PORT in all examples)*
+
 ## Testing
 
-Use the interactive test page at http://localhost:6002/test (or port 6001 for server.js) to:
+Use the interactive test page at http://localhost:6001/test (or your configured PORT) to:
 - Register new users
 - Test Socket.IO connections (both methods)
 - Subscribe to channels
@@ -251,7 +290,7 @@ Use the interactive test page at http://localhost:6002/test (or port 6001 for se
 
 The test page now includes a dedicated section to test the `/broadcast` HTTP POST endpoint:
 
-1. **Navigate to the test page**: http://localhost:6001/test (or 6002 for server-api.js)
+1. **Navigate to the test page**: http://localhost:6001/test (or your configured PORT)
 2. **Connect and Subscribe**: First, connect to Socket.IO using Method 1 or 2, then subscribe to a channel
 3. **Use the HTTP Endpoint Tester**: 
    - Scroll to the "Test /broadcast HTTP Endpoint" section
@@ -262,6 +301,8 @@ The test page now includes a dedicated section to test the `/broadcast` HTTP POS
 4. **Watch for results**: The broadcast will be sent via HTTP POST and you'll see it arrive in your Socket.IO connection
 
 This simulates exactly how Laravel or other backends would send broadcasts to the Socket.IO server.
+
+**Note:** The APP_URL is automatically injected from your `.env` configuration, so the test page will always use the correct server URL.
 
 ## Author
 
