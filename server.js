@@ -164,8 +164,8 @@ app.get('/socket-ui', (req, res) => {
         </div>
 
         <div class="links">
-          <a href="/socket/test"><i class="fas fa-flask"></i> Test Page</a>
-          <a href="/socket/docs"><i class="fas fa-book"></i> Documentation</a>
+          <a href="/socket-ui/test"><i class="fas fa-flask"></i> Test Page</a>
+          <a href="/socket-ui/docs"><i class="fas fa-book"></i> Documentation</a>
         </div>
       </div>
     </body>
