@@ -106,13 +106,18 @@
     <h2>Test Socket.IO Features</h2>
     <input type="text" id="channelName" placeholder="Channel name (e.g., channel-name)" value="channel-name">
     <button onclick="subscribeChannel()">Subscribe to Channel</button>
-    <button onclick="sendBroadcast()">Send Broadcast Event</button>
+    
+    <div style="margin-top: 15px;">
+      <input type="text" id="messageInput" placeholder="Enter your message..." style="width: calc(100% - 150px); margin-right: 10px;" onkeypress="if(event.key === 'Enter') sendBroadcast()">
+      <button onclick="sendBroadcast()">Send Broadcast Event</button>
+    </div>
+    
     <div id="log3" class="log">
       <div class="log-item info">
         <strong><i class="fas fa-info-circle"></i> Instructions:</strong><br>
         1) Connect with Method 1 or 2<br>
         2) Subscribe to the channel (e.g., "channel-name")<br>
-        3) Send broadcast via curl or use the button above<br>
+        3) Type a message and send broadcast using the button above<br>
         <strong><i class="fas fa-exclamation-triangle"></i> Important:</strong> Make sure the channel name in the broadcast matches the channel you subscribed to!
       </div>
     </div>
@@ -320,6 +325,7 @@
 
     function sendBroadcast() {
       const channel = document.getElementById('channelName').value;
+      const message = document.getElementById('messageInput').value;
       const activeSocket = socket1 || socket2;
 
       if (!activeSocket || !activeSocket.connected) {
@@ -327,16 +333,24 @@
         return;
       }
 
+      if (!message.trim()) {
+        alert('Please enter a message to send');
+        return;
+      }
+
       activeSocket.emit('broadcast-event', {
         channel: channel,
         event: 'test-message',
         data: { 
-          message: 'Hello from test page!',
+          message: message,
           timestamp: new Date().toISOString()
         }
       });
 
-      addLog('log3', `[SEND] Sent broadcast to channel: ${channel}`, 'info');
+      addLog('log3', `[SEND] Sent broadcast to channel: ${channel} - "${message}"`, 'info');
+      
+      // Clear the message input after sending
+      document.getElementById('messageInput').value = '';
     }
 
     function addLog(logId, message, type = 'info') {
