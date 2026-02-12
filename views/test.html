@@ -164,8 +164,9 @@
   </div>
 
   <script>
-    // Get APP_URL from window (injected by server)
+    // Get APP_URL and SOCKET_TOKEN from window (injected by server)
     const APP_URL = window.APP_URL || 'http://localhost:6001';
+    const SOCKET_TOKEN = window.SOCKET_TOKEN || 'default_secret_token';
     
     // Update code examples with actual URL
     document.addEventListener('DOMContentLoaded', () => {
@@ -341,13 +342,14 @@
       activeSocket.emit('broadcast-event', {
         channel: channel,
         event: 'test-message',
+        socket_token: SOCKET_TOKEN,
         data: { 
           message: message,
           timestamp: new Date().toISOString()
         }
       });
 
-      addLog('log3', `[SEND] Sent broadcast to channel: ${channel} - "${message}"`, 'info');
+      addLog('log3', `[SEND] Sent broadcast to channel: ${channel} - "${message}" (with token)`, 'info');
       
       // Clear the message input after sending
       document.getElementById('messageInput').value = '';
@@ -393,7 +395,8 @@
           body: JSON.stringify({
             channel: channel,
             event: event,
-            data: data
+            data: data,
+            socket_token: SOCKET_TOKEN
           })
         });
 
@@ -401,7 +404,7 @@
 
         if (response.ok) {
           addLog('httpLog', `[✓ SUCCESS] Server responded: ${JSON.stringify(result)}`, 'success');
-          addLog('httpLog', `[INFO] Broadcast sent to channel "${channel}" with event "${event}"`, 'info');
+          addLog('httpLog', `[INFO] Broadcast sent to channel "${channel}" with event "${event}" (with token)`, 'info');
           addLog('httpLog', `[WAITING] If you're subscribed to "${channel}", you should receive the event...`, 'info');
         } else {
           addLog('httpLog', `[✗ ERROR] Server error (${response.status}): ${JSON.stringify(result)}`, 'error');
