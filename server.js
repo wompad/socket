@@ -7,6 +7,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const fs = require('fs');
+const { attachPresence } = require('./presence');
 
 // ===============================
 // ⚙️ Express Setup
@@ -40,6 +41,7 @@ const io = new Server(server, {
     methods: ['GET', 'POST']
   }
 });
+const presence = attachPresence(io);
 
 // ===============================
 // 💬 Socket.IO Connection Handling
@@ -123,6 +125,15 @@ app.post('/broadcast', (req, res) => {
   io.to(channel).emit(event, data);
 
   res.status(200).json({ success: true });
+});
+
+app.get('/presence/:channel', (req, res) => {
+  const { channel } = req.params;
+  if (!channel) {
+    return res.status(400).json({ error: 'Channel is required' });
+  }
+
+  return res.status(200).json(presence.getChannelPresence(channel));
 });
 
 // ===============================
