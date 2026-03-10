@@ -7,7 +7,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const fs = require('fs');
-const { attachPresence } = require('./presence');
 
 // ===============================
 // ⚙️ Express Setup
@@ -22,12 +21,137 @@ app.use(express.json());
 const PORT = process.env.PORT || 6001;
 const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 const SOCKET_TOKEN = process.env.SOCKET_TOKEN || 'default_secret_token';
+const PRESENCE_ENABLED = process.env.PRESENCE_ENABLED !== 'false';
+const PRESENCE_EVENT = 'presence:update';
+
+// ===============================
+// 👥 Presence Store (In-Memory)
+// ===============================
+// channel -> (socketId -> member)
+const presenceByChannel = new Map();
+// socketId -> Set(channel)
+const channelsBySocket = new Map();
 
 // ===============================
 // 🔐 Token Validator
 // ===============================
 function isValidToken(token) {
   return token && token === SOCKET_TOKEN;
+}
+
+function buildPresencePayload(channel) {
+  const channelMembers = presenceByChannel.get(channel) || new Map();
+  const members = Array.from(channelMembers.values()).map((member) => ({
+    socketId: member.socketId,
+    userId: member.userId,
+    name: member.name,
+    joinedAt: member.joinedAt
+  }));
+
+  return {
+    channel,
+    count: members.length,
+    members,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function normalizeSubscribePayload(payload) {
+  if (typeof payload === 'string') {
+    return { channel: payload, user: {} };
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return { channel: '', user: {} };
+  }
+
+  return {
+    channel: payload.channel || '',
+    user: payload.user || {}
+  };
+}
+
+function normalizeChannelPayload(payload) {
+  if (typeof payload === 'string') return payload;
+  if (payload && typeof payload === 'object' && typeof payload.channel === 'string') {
+    return payload.channel;
+  }
+  return '';
+}
+
+function ensureChannelMap(channel) {
+  if (!presenceByChannel.has(channel)) {
+    presenceByChannel.set(channel, new Map());
+  }
+  return presenceByChannel.get(channel);
+}
+
+function ensureSocketChannels(socketId) {
+  if (!channelsBySocket.has(socketId)) {
+    channelsBySocket.set(socketId, new Set());
+  }
+  return channelsBySocket.get(socketId);
+}
+
+function addPresenceMember(socket, channel, user) {
+  const members = ensureChannelMap(channel);
+  const socketChannels = ensureSocketChannels(socket.id);
+
+  const userId = user.userId || user.id || socket.id;
+  const name = user.name || user.displayName || user.username || userId;
+
+  members.set(socket.id, {
+    socketId: socket.id,
+    userId: String(userId),
+    name: String(name),
+    joinedAt: new Date().toISOString()
+  });
+
+  socketChannels.add(channel);
+}
+
+function removePresenceMember(socketId, channel) {
+  const members = presenceByChannel.get(channel);
+  if (!members) return;
+
+  members.delete(socketId);
+  if (members.size === 0) {
+    presenceByChannel.delete(channel);
+  }
+
+  const socketChannels = channelsBySocket.get(socketId);
+  if (!socketChannels) return;
+
+  socketChannels.delete(channel);
+  if (socketChannels.size === 0) {
+    channelsBySocket.delete(socketId);
+  }
+}
+
+function emitPresenceUpdate(io, channel) {
+  io.to(channel).emit(PRESENCE_EVENT, buildPresencePayload(channel));
+}
+
+function safePresenceAdd(io, socket, channel, user) {
+  if (!PRESENCE_ENABLED) return;
+
+  try {
+    addPresenceMember(socket, channel, user);
+    emitPresenceUpdate(io, channel);
+  } catch (error) {
+    console.warn(`⚠️ Presence add failed for socket ${socket.id} on "${channel}": ${error.message}`);
+  }
+}
+
+function safePresenceRemove(io, socketId, channel) {
+  if (!PRESENCE_ENABLED) return;
+
+  try {
+    removePresenceMember(socketId, channel);
+    emitPresenceUpdate(io, channel);
+  } catch (error) {
+    console.warn(`⚠️ Presence remove failed for socket ${socketId} on "${channel}": ${error.message}`);
+  }
 }
 
 // ===============================
@@ -41,7 +165,6 @@ const io = new Server(server, {
     methods: ['GET', 'POST']
   }
 });
-const presence = attachPresence(io);
 
 // ===============================
 // 💬 Socket.IO Connection Handling
@@ -52,26 +175,32 @@ io.on('connection', (socket) => {
   // ===============================
   // 📡 Subscribe to Channel (No Token Required)
   // ===============================
-  socket.on('subscribe', (channel) => {
+  socket.on('subscribe', (payload) => {
+    const { channel, user } = normalizeSubscribePayload(payload);
+
     if (!channel) {
       console.warn(`⚠️ Invalid subscribe attempt from ${socket.id} - no channel provided`);
       return;
     }
 
     socket.join(channel);
+    safePresenceAdd(io, socket, channel, user);
     console.log(`📡 ${socket.id} subscribed to "${channel}"`);
   });
 
   // ===============================
   // 🚪 Leave Channel (No Token Required)
   // ===============================
-  socket.on('leave', (channel) => {
+  socket.on('leave', (payload) => {
+    const channel = normalizeChannelPayload(payload);
+
     if (!channel) {
       console.warn(`⚠️ Invalid leave attempt from ${socket.id} - no channel provided`);
       return;
     }
 
     socket.leave(channel);
+    safePresenceRemove(io, socket.id, channel);
     console.log(`🚪 ${socket.id} left "${channel}"`);
   });
 
@@ -105,6 +234,14 @@ io.on('connection', (socket) => {
   // 🔌 Disconnect
   // ===============================
   socket.on('disconnect', (reason) => {
+    const socketChannels = channelsBySocket.get(socket.id);
+    if (socketChannels && socketChannels.size > 0) {
+      const channels = Array.from(socketChannels);
+      for (const channel of channels) {
+        safePresenceRemove(io, socket.id, channel);
+      }
+    }
+
     console.log(`🔴 Client disconnected: ${socket.id} (${reason})`);
   });
 });
@@ -133,7 +270,26 @@ app.get('/presence/:channel', (req, res) => {
     return res.status(400).json({ error: 'Channel is required' });
   }
 
-  return res.status(200).json(presence.getChannelPresence(channel));
+  if (!PRESENCE_ENABLED) {
+    return res.status(200).json({
+      channel,
+      count: 0,
+      members: [],
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  try {
+    return res.status(200).json(buildPresencePayload(channel));
+  } catch (error) {
+    console.warn(`⚠️ Presence read failed for "${channel}": ${error.message}`);
+    return res.status(200).json({
+      channel,
+      count: 0,
+      members: [],
+      updatedAt: new Date().toISOString()
+    });
+  }
 });
 
 // ===============================
@@ -527,4 +683,5 @@ server.listen(PORT, () => {
   console.log(`🚀 Socket.IO server running on port: ${PORT}`);
   console.log(`🔗 App URL: ${APP_URL}`);
   console.log(`🔐 Token protection enabled`);
+  console.log(`👥 Presence ${PRESENCE_ENABLED ? 'enabled' : 'disabled'} (PRESENCE_ENABLED=${String(PRESENCE_ENABLED)})`);
 });
