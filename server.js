@@ -20,13 +20,40 @@ app.use(express.json());
 // ===============================
 const PORT = process.env.PORT || 6001;
 const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
-const SOCKET_TOKEN = process.env.SOCKET_TOKEN || 'default_secret_token';
+const SOCKET_BEARER_TOKEN = sanitizeToken(process.env.SOCKET_BEARER_TOKEN || '');
+const SOCKET_TOKEN = SOCKET_BEARER_TOKEN;
 
 // ===============================
 // 🔐 Token Validator
 // ===============================
+function sanitizeToken(token) {
+  return String(token || '').trim().replace(/^['"]|['"]$/g, '');
+}
+
 function isValidToken(token) {
-  return token && token === SOCKET_TOKEN;
+  const expectedToken = sanitizeToken(SOCKET_BEARER_TOKEN);
+  const receivedToken = sanitizeToken(token);
+  const matches = expectedToken !== '' && receivedToken === expectedToken;
+
+  console.log(
+    `Broadcast auth token expected_configured=${expectedToken !== ''} expected_length=${expectedToken.length} received_length=${receivedToken.length} match=${matches}`
+  );
+
+  return matches;
+}
+
+function extractBearerToken(req) {
+  const authorization = String(req.headers.authorization || '').trim();
+  const hasAuthorization = authorization !== '';
+  const hasBearerPrefix = /^Bearer\s+/i.test(authorization);
+
+  console.log(`Broadcast auth header present=${hasAuthorization} bearer_prefix=${hasBearerPrefix}`);
+
+  if (!hasBearerPrefix) {
+    return '';
+  }
+
+  return sanitizeToken(authorization.replace(/^Bearer\s+/i, ''));
 }
 
 // ===============================
@@ -111,9 +138,10 @@ io.on('connection', (socket) => {
 // 📨 Laravel Secure Broadcast Endpoint
 // ===============================
 app.post('/broadcast', (req, res) => {
-  const { channel, event, data, socket_token } = req.body;
+  const { channel, event, data } = req.body;
+  const bearerToken = extractBearerToken(req);
 
-  if (!channel || !event || !isValidToken(socket_token)) {
+  if (!channel || !event || !isValidToken(bearerToken)) {
     console.warn('⛔ Unauthorized Laravel broadcast attempt.');
     return res.status(403).json({ error: 'Unauthorized' });
   }
