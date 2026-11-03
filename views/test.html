@@ -105,6 +105,7 @@
   <div class="section">
     <h2>Test Socket.IO Features</h2>
     <input type="text" id="channelName" placeholder="Channel name (e.g., channel-name)" value="channel-name">
+    <input type="text" id="presenceName" placeholder="Presence name (e.g., John)" value="Test User">
     <button onclick="subscribeChannel()">Subscribe to Channel</button>
     
     <div style="margin-top: 15px;">
@@ -120,6 +121,12 @@
         3) Type a message and send broadcast using the button above<br>
         <strong><i class="fas fa-exclamation-triangle"></i> Important:</strong> Make sure the channel name in the broadcast matches the channel you subscribed to!
       </div>
+    </div>
+
+    <div style="margin-top: 15px;">
+      <h3 style="margin-bottom: 8px;">Active Members</h3>
+      <div id="presenceSummary" style="font-size: 13px; margin-bottom: 6px; color: #555;">No presence data yet.</div>
+      <div id="presenceList" class="log"></div>
     </div>
   </div>
 
@@ -179,6 +186,7 @@
     let token = '25f03678c5db2a4960da7c72b0be629d55e519eba6f9eb3c48a40d7af56883c1';
     let socket1 = null;
     let socket2 = null;
+    let subscribedChannel = '';
 
     // Register user
     async function register() {
@@ -250,6 +258,8 @@
         addLog('log1', logMessage, 'success');
         addLog('log3', logMessage, 'success');
       });
+
+      socket1.on('presence:update', handlePresenceUpdate);
     }
 
     function disconnectMethod1() {
@@ -293,6 +303,8 @@
         addLog('log2', logMessage, 'success');
         addLog('log3', logMessage, 'success');
       });
+
+      socket2.on('presence:update', handlePresenceUpdate);
     }
 
     function disconnectMethod2() {
@@ -306,6 +318,7 @@
     // Test Socket.IO features
     function subscribeChannel() {
       const channel = document.getElementById('channelName').value;
+      const presenceName = document.getElementById('presenceName').value.trim();
       const activeSocket = socket1 || socket2;
 
       if (!activeSocket || !activeSocket.connected) {
@@ -318,7 +331,13 @@
         return;
       }
 
-      activeSocket.emit('subscribe', channel);
+      subscribedChannel = channel;
+      activeSocket.emit('subscribe', {
+        channel: channel,
+        user: {
+          name: presenceName || 'Anonymous'
+        }
+      });
       addLog('log3', `[SUBSCRIBE] Subscribed to channel: "${channel}"`, 'success');
       addLog('log3', `[WAIT] Waiting for broadcasts on channel: "${channel}"...`, 'info');
       addLog('log3', `[TIP] Use the same channel name in your curl command!`, 'info');
@@ -362,6 +381,32 @@
       item.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
       log.appendChild(item);
       log.scrollTop = log.scrollHeight;
+    }
+
+    function handlePresenceUpdate(payload) {
+      if (!payload || payload.channel !== subscribedChannel) return;
+
+      const summary = document.getElementById('presenceSummary');
+      const list = document.getElementById('presenceList');
+      const members = Array.isArray(payload.members) ? payload.members : [];
+
+      summary.textContent = `${payload.count || 0} active member(s) in "${payload.channel}"`;
+      list.innerHTML = '';
+
+      if (members.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'log-item info';
+        empty.textContent = 'No active members in this channel.';
+        list.appendChild(empty);
+        return;
+      }
+
+      members.forEach((member) => {
+        const item = document.createElement('div');
+        item.className = 'log-item success';
+        item.textContent = `${member.name} (${member.userId}) - socket ${member.socketId}`;
+        list.appendChild(item);
+      });
     }
 
     // Test /broadcast HTTP endpoint
