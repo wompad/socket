@@ -20,10 +20,6 @@ app.use(express.json());
 // ===============================
 const PORT = process.env.PORT || 6001;
 const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
-<<<<<<< HEAD
-const SOCKET_BEARER_TOKEN = sanitizeToken(process.env.SOCKET_BEARER_TOKEN || '');
-const SOCKET_TOKEN = SOCKET_BEARER_TOKEN;
-=======
 const SOCKET_TOKEN = process.env.SOCKET_TOKEN || 'default_secret_token';
 const PRESENCE_ENABLED = process.env.PRESENCE_ENABLED !== 'false';
 const PRESENCE_EVENT = 'presence:update';
@@ -35,7 +31,6 @@ const PRESENCE_EVENT = 'presence:update';
 const presenceByChannel = new Map();
 // socketId -> Set(channel)
 const channelsBySocket = new Map();
->>>>>>> c4621b2d41884757e9c03d57a414376b54a14fc3
 
 // ===============================
 // 🔐 Token Validator
@@ -45,7 +40,7 @@ function sanitizeToken(token) {
 }
 
 function isValidToken(token) {
-  const expectedToken = sanitizeToken(SOCKET_BEARER_TOKEN);
+  const expectedToken = sanitizeToken(SOCKET_TOKEN);
   const receivedToken = sanitizeToken(token);
   const matches = expectedToken !== '' && receivedToken === expectedToken;
 
